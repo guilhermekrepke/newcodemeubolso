@@ -24,6 +24,11 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Install Android SDK 36
+        run: |
+          python3 -c "print('y\n' * 100)" | sdkmanager --licenses
+          sdkmanager "platforms;android-36"
+
       - name: Create Android project files
         run: flutter create --platforms=android --org com.meubolso --project-name meu_bolso .
 
@@ -39,7 +44,7 @@ jobs:
               text = gradle.read_text()
               text, compile_count = re.subn(
                   r"compileSdk\s*=\s*flutter\.compileSdkVersion",
-                  "compileSdk = 35",
+                  "compileSdk = 36",
                   text,
               )
               text, target_count = re.subn(
@@ -54,7 +59,7 @@ jobs:
               text = gradle.read_text()
               text, compile_count = re.subn(
                   r"compileSdkVersion\s+flutter\.compileSdkVersion",
-                  "compileSdkVersion 35",
+                  "compileSdkVersion 36",
                   text,
               )
               text, target_count = re.subn(
