@@ -1,1 +1,98 @@
+name: Build Android APK
 
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create Android project files
+        run: flutter create --platforms=android --org com.meubolso --project-name meu_bolso .
+
+      - name: Configure Android SDK levels and permissions
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          gradle = Path("android/app/build.gradle.kts")
+          if gradle.exists():
+              text = gradle.read_text()
+              text, compile_count = re.subn(
+                  r"compileSdk\s*=\s*flutter\.compileSdkVersion",
+                  "compileSdk = 35",
+                  text,
+              )
+              text, target_count = re.subn(
+                  r"targetSdk\s*=\s*flutter\.targetSdkVersion",
+                  "targetSdk = 35",
+                  text,
+              )
+          else:
+              gradle = Path("android/app/build.gradle")
+              if not gradle.exists():
+                  raise SystemExit("Flutter did not generate the Android app Gradle file")
+              text = gradle.read_text()
+              text, compile_count = re.subn(
+                  r"compileSdkVersion\s+flutter\.compileSdkVersion",
+                  "compileSdkVersion 35",
+                  text,
+              )
+              text, target_count = re.subn(
+                  r"targetSdkVersion\s+flutter\.targetSdkVersion",
+                  "targetSdkVersion 35",
+                  text,
+              )
+
+          if compile_count != 1 or target_count != 1:
+              raise SystemExit(
+                  f"Expected one SDK setting each; found compileSdk={compile_count}, "
+                  f"targetSdk={target_count}"
+              )
+          gradle.write_text(text)
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          text = manifest.read_text()
+          text = re.sub(r'android:label="[^"]*"', 'android:label="Meu Bolso"', text, count=1)
+          permissions = [
+              '    <uses-permission android:name="android.permission.INTERNET"/>',
+              '    <uses-permission android:name="android.permission.RECORD_AUDIO"/>',
+          ]
+          for permission in permissions:
+              name = re.search(r'android:name="([^"]+)"', permission).group(1)
+              if name not in text:
+                  text = text.replace("<application", permission + "\n    <application", 1)
+          manifest.write_text(text)
+          PY
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: meu-bolso-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
